@@ -25,6 +25,15 @@ namespace MapEditor {
         Texture2D[] mapsTex;
         Texture2D nulLTex;
 
+        Texture2D iconsTexture;
+        int mouseX, mouseY;
+        bool rightMouseDown;
+        bool mouseClick;
+
+        int mouseDragSegment = -1;
+        int currentLayer = 1;
+        int pMouseX, pMouseY;
+
         public Game1() {
             graphics = new GraphicsDeviceManager(this);
             Content.RootDirectory = "Content";
@@ -62,6 +71,8 @@ namespace MapEditor {
             mapsTex = new Texture2D[1];
             for (int i = 0; i < mapsTex.Length; i++)
                 mapsTex[i] = Content.Load<Texture2D>(@"gfx/maps" + (i + 1).ToString());
+
+            iconsTexture = Content.Load<Texture2D>(@"gfx/icons");
         }
 
         /// <summary>
@@ -84,6 +95,32 @@ namespace MapEditor {
 
             // TODO: Add your update logic here
 
+            MouseState mState = Mouse.GetState();
+            mouseX = mState.X;
+            mouseY = mState.Y;
+
+            bool pMouseDown = rightMouseDown;
+            if(mState.LeftButton == ButtonState.Pressed)
+                rightMouseDown = true;
+            else
+                rightMouseDown = false;
+
+            if(pMouseDown && !rightMouseDown)
+                mouseClick = true;
+
+            if(mouseDragSegment > -1) {
+                if(!rightMouseDown)
+                    mouseDragSegment = -1;
+                else {
+                    Vector2 loc = map.Segments[currentLayer, mouseDragSegment].Location;
+                    loc.X += (mouseX - pMouseX);
+                    loc.Y += (mouseY - pMouseY);
+                    map.Segments[currentLayer, mouseDragSegment].Location = loc;
+                }
+            }
+
+            pMouseX = mouseX;
+            pMouseY = mouseY;
             base.Update(gameTime);
         }
 
@@ -94,6 +131,16 @@ namespace MapEditor {
         protected override void Draw(GameTime gameTime) {
             GraphicsDevice.Clear(Color.CornflowerBlue);
 
+            map.Draw(spriteBatch, mapsTex, new Vector2());
+
+            DrawMapSegments();
+            DrawText();
+            DrawCursor();
+            base.Draw(gameTime);
+        }
+
+
+        private void DrawMapSegments() {
             Rectangle sRect = new Rectangle();
             Rectangle dRect = new Rectangle();
 
@@ -104,9 +151,9 @@ namespace MapEditor {
             spriteBatch.Draw(nulLTex, new Rectangle(500, 20, 280, 550), new Color(0, 0, 0, 100));
             spriteBatch.End();
 
-            for (int i = 0; i < 9; i++) {
+            for(int i = 0; i < 9; i++) {
                 SegmentDefinition segDef = map.SegmentDefinitions[i];
-                if (segDef == null)
+                if(segDef == null)
                     continue;
 
                 spriteBatch.Begin();
@@ -115,7 +162,7 @@ namespace MapEditor {
 
                 sRect = segDef.SourceRectangle;
 
-                if (sRect.Width > sRect.Height) {
+                if(sRect.Width > sRect.Height) {
                     dRect.Width = 45;
                     dRect.Height = (int)(((float)sRect.Height / (float)sRect.Width) * 45.0f);
                 } else {
@@ -130,7 +177,26 @@ namespace MapEditor {
 
                 text.Color = Color.White;
                 text.DrawText(dRect.X + 50, dRect.Y, segDef.Name);
+
+
+                // THIS should be elsewhere, but we're breaking convention and putting logic here
+                if(rightMouseDown) {
+                    if(mouseX > dRect.X && mouseX < 780 &&
+                        mouseY > dRect.Y && mouseY < dRect.Y + 45) {
+                        if(mouseDragSegment == -1) {
+                            int f = map.AddSegment(currentLayer, i);
+                            if(f <= -1)
+                                continue;
+
+                            map.Segments[currentLayer, f].Location.X = mouseX - sRect.Width / 4;
+                            map.Segments[currentLayer, f].Location.Y = mouseY - sRect.Height / 4;
+                            mouseDragSegment = f;
+                        }
+                    }
+                }
             }
+
+
 
             //// TODO: Add your drawing code here
             //text.Size = 3.0f;
@@ -142,9 +208,47 @@ namespace MapEditor {
             //    text.DrawText(25 - i * 2, 250 - i * 2, "Blarg dsfsdfds fsd fds ");
             //}
 
-            // base draw!
+        }
 
-            base.Draw(gameTime);
+        /// <summary>
+        /// 
+        /// </summary>
+        private void DrawCursor() {
+            spriteBatch.Begin();
+            spriteBatch.Draw(iconsTexture,
+                new Vector2(mouseX, mouseY),  
+                new Rectangle(0,0,32,32), 
+                Color.White, 
+                0.0f, 
+                new Vector2(0,0), 
+                1.0f, 
+                SpriteEffects.None, 
+                0.0f);
+                
+            spriteBatch.End();
+        }
+
+
+
+        /// <summary>
+        /// 
+        /// </summary>
+        private void DrawText() {
+            string layerName = "map";
+            switch(currentLayer) {
+                case 0:
+                    layerName = "back";
+                    break;
+                case 1:
+                    layerName = "mid";
+                    break;
+                case 2:
+                    layerName = "fore";
+                    break;
+            }
+            if(text.DrawClickText(5, 5, "layer " + layerName, mouseX, mouseY, mouseClick))
+                currentLayer = (currentLayer + 1) % 3;
+            mouseClick = false;
         }
     }
 }
