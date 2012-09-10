@@ -34,11 +34,16 @@ namespace MapEditor {
         int currentLayer = 1;
         int pMouseX, pMouseY;
 
+        bool midMouseDown;
+        Vector2 scroll;
+
+        DrawingMode drawType = DrawingMode.SegmentSelection;
+
         public Game1() {
             graphics = new GraphicsDeviceManager(this);
             Content.RootDirectory = "Content";
             graphics.PreferredBackBufferHeight = 700;
-           // graphics.PreferredBackBufferWidth = 900;
+            // graphics.PreferredBackBufferWidth = 900;
         }
 
         /// <summary>
@@ -75,6 +80,8 @@ namespace MapEditor {
             iconsTexture = Content.Load<Texture2D>(@"gfx/icons");
         }
 
+
+
         /// <summary>
         /// UnloadContent will be called once per game and is the place to unload
         /// all content.
@@ -82,6 +89,8 @@ namespace MapEditor {
         protected override void UnloadContent() {
             // TODO: Unload any non ContentManager content here
         }
+
+
 
         /// <summary>
         /// Allows the game to run logic such as updating the world,
@@ -100,16 +109,36 @@ namespace MapEditor {
             mouseY = mState.Y;
 
             bool pMouseDown = rightMouseDown;
-            if(mState.LeftButton == ButtonState.Pressed)
+            if (mState.LeftButton == ButtonState.Pressed) {
+                if (!rightMouseDown && mouseX < 500) {
+                    if (drawType == DrawingMode.SegmentSelection) {
+                        int f = map.GetHoveredSegment(mouseX, mouseY, currentLayer, scroll);
+
+                        if (f != -1)
+                            mouseDragSegment = f;
+                    } else if (drawType == DrawingMode.CollisionMap) {
+                        int x = (mouseX + (int)(scroll.X / 2)) / 32;
+                        int y = (mouseY + (int)(scroll.Y / 2)) / 32;
+                        if (x >= 0 && y >= 0 && x < 20 && y < 20) {
+                            if (mState.LeftButton == ButtonState.Pressed)
+                                map.Grid[x, y] = 1;
+                            else if (mState.RightButton == ButtonState.Pressed)
+                                map.Grid[x, y] = 0;
+                        }
+                    }
+                }
                 rightMouseDown = true;
-            else
+
+            } else
                 rightMouseDown = false;
 
-            if(pMouseDown && !rightMouseDown)
+            if (pMouseDown && !rightMouseDown)
                 mouseClick = true;
 
-            if(mouseDragSegment > -1) {
-                if(!rightMouseDown)
+            midMouseDown = (mState.MiddleButton == ButtonState.Pressed);
+
+            if (mouseDragSegment > -1) {
+                if (!rightMouseDown)
                     mouseDragSegment = -1;
                 else {
                     Vector2 loc = map.Segments[currentLayer, mouseDragSegment].Location;
@@ -117,6 +146,12 @@ namespace MapEditor {
                     loc.Y += (mouseY - pMouseY);
                     map.Segments[currentLayer, mouseDragSegment].Location = loc;
                 }
+            }
+
+
+            if (midMouseDown) {
+                scroll.X -= (mouseX - pMouseX) * 2.0f;
+                scroll.Y -= (mouseY - pMouseY) * 2.0f;
             }
 
             pMouseX = mouseX;
@@ -131,15 +166,25 @@ namespace MapEditor {
         protected override void Draw(GameTime gameTime) {
             GraphicsDevice.Clear(Color.CornflowerBlue);
 
-            map.Draw(spriteBatch, mapsTex, new Vector2());
+            map.Draw(spriteBatch, mapsTex, scroll);
 
-            DrawMapSegments();
+            switch (drawType) {
+                case DrawingMode.SegmentSelection:
+                    DrawMapSegments();
+                    break;
+            }
+
+            DrawGrid();
             DrawText();
             DrawCursor();
             base.Draw(gameTime);
         }
 
 
+
+        /// <summary>
+        /// 
+        /// </summary>
         private void DrawMapSegments() {
             Rectangle sRect = new Rectangle();
             Rectangle dRect = new Rectangle();
@@ -151,9 +196,9 @@ namespace MapEditor {
             spriteBatch.Draw(nulLTex, new Rectangle(500, 20, 280, 550), new Color(0, 0, 0, 100));
             spriteBatch.End();
 
-            for(int i = 0; i < 9; i++) {
+            for (int i = 0; i < 9; i++) {
                 SegmentDefinition segDef = map.SegmentDefinitions[i];
-                if(segDef == null)
+                if (segDef == null)
                     continue;
 
                 spriteBatch.Begin();
@@ -162,7 +207,7 @@ namespace MapEditor {
 
                 sRect = segDef.SourceRectangle;
 
-                if(sRect.Width > sRect.Height) {
+                if (sRect.Width > sRect.Height) {
                     dRect.Width = 45;
                     dRect.Height = (int)(((float)sRect.Height / (float)sRect.Width) * 45.0f);
                 } else {
@@ -180,13 +225,20 @@ namespace MapEditor {
 
 
                 // THIS should be elsewhere, but we're breaking convention and putting logic here
-                if(rightMouseDown) {
-                    if(mouseX > dRect.X && mouseX < 780 &&
+                if (rightMouseDown) {
+                    if (mouseX > dRect.X && mouseX < 780 &&
                         mouseY > dRect.Y && mouseY < dRect.Y + 45) {
-                        if(mouseDragSegment == -1) {
+                        if (mouseDragSegment == -1) {
                             int f = map.AddSegment(currentLayer, i);
-                            if(f <= -1)
+                            if (f <= -1)
                                 continue;
+
+                            float layerScalar = 0.5f;
+                            if (currentLayer == 0)
+                                layerScalar = 0.375f;
+                            else if (currentLayer == 2)
+                                layerScalar = 0.625f;
+
 
                             map.Segments[currentLayer, f].Location.X = mouseX - sRect.Width / 4;
                             map.Segments[currentLayer, f].Location.Y = mouseY - sRect.Height / 4;
@@ -195,36 +247,59 @@ namespace MapEditor {
                     }
                 }
             }
-
-
-
-            //// TODO: Add your drawing code here
-            //text.Size = 3.0f;
-            //text.Color = new Color(0, 0, 0, 125);
-            //for (int i = 0; i < 3; i++) {
-            //    if (i == 2)
-            //        text.Color = Color.White;
-
-            //    text.DrawText(25 - i * 2, 250 - i * 2, "Blarg dsfsdfds fsd fds ");
-            //}
-
         }
 
+
+
         /// <summary>
-        /// 
+        /// Draws the collision grid
+        /// </summary>
+        private void DrawGrid() {
+            spriteBatch.Begin();
+
+            //iterate over the size of the array -- this could be refactored so that we actually get the size from the map as opposed to being here
+            for (int y = 0; y < 20; y++) {
+                for (int x = 0; x < 20; x++) {
+                    Rectangle destRect = new Rectangle(
+                        x * 32 - (int)(scroll.X / 2),
+                        y * 32 - (int)(scroll.Y / 2),
+                        32, 32);
+
+                    if (x < 19)
+                        spriteBatch.Draw(nulLTex, new Rectangle(destRect.X, destRect.Y, 32, 1), new Color(255, 0, 0, 100));
+
+                    if (y < 19)
+                        spriteBatch.Draw(nulLTex, new Rectangle(destRect.X, destRect.Y, 1, 32), new Color(255, 0, 0, 100));
+
+
+                    if (x < 19 && y < 19) {
+                        if (map.Grid[x, y] == 1)
+                            spriteBatch.Draw(nulLTex, destRect, new Color(255, 0, 0, 100));
+
+                    }
+                }
+            }
+
+            spriteBatch.End();
+        }
+
+
+
+        /// <summary>
+        /// Draws the mouse cursor
         /// </summary>
         private void DrawCursor() {
             spriteBatch.Begin();
             spriteBatch.Draw(iconsTexture,
-                new Vector2(mouseX, mouseY),  
-                new Rectangle(0,0,32,32), 
-                Color.White, 
-                0.0f, 
-                new Vector2(0,0), 
-                1.0f, 
-                SpriteEffects.None, 
+                new Vector2(mouseX, mouseY),
+                new Rectangle(0, 0, 32, 32),
+                Color.White,
+                0.0f,
+                new Vector2(0, 0),
+                1.0f,
+                SpriteEffects.None,
                 0.0f);
-                
+
             spriteBatch.End();
         }
 
@@ -235,7 +310,7 @@ namespace MapEditor {
         /// </summary>
         private void DrawText() {
             string layerName = "map";
-            switch(currentLayer) {
+            switch (currentLayer) {
                 case 0:
                     layerName = "back";
                     break;
@@ -246,9 +321,28 @@ namespace MapEditor {
                     layerName = "fore";
                     break;
             }
-            if(text.DrawClickText(5, 5, "layer " + layerName, mouseX, mouseY, mouseClick))
+
+
+            if (text.DrawClickText(5, 5, "layer " + layerName, mouseX, mouseY, mouseClick))
                 currentLayer = (currentLayer + 1) % 3;
-            mouseClick = false;
+ 
+
+            // this will handle whether it's the segment or collision map that we're looking at
+            switch (drawType) {
+                case DrawingMode.SegmentSelection:
+                    layerName = "select";
+                    break;
+                case DrawingMode.CollisionMap:
+                    layerName = "col";
+                    break;
+            }
+
+            if (text.DrawClickText(5, 25, "draw " + layerName, mouseX, mouseY, mouseClick))
+                drawType = (DrawingMode)((int)(drawType + 1) % 2);
+
+
+            mouseClick = false; // reset the mosue
         }
     }
 }
+

@@ -7,13 +7,20 @@ namespace MapEditor.MapClasses {
     class Map {
         SegmentDefinition[] segmentDefs;
         MapSegment[,] mapSegments;
+        int[,] col;
 
         public Map() {
             segmentDefs = new SegmentDefinition[512];
             mapSegments = new MapSegment[3, 64];
+            col = new int[20, 20];
             ReadSegmentDefinitions();
         }
 
+
+
+        /// <summary>
+        /// 
+        /// </summary>
         private void ReadSegmentDefinitions() {
             StreamReader reader = new StreamReader(@"Content/maps.zdx");
             string t = "";
@@ -25,12 +32,12 @@ namespace MapEditor.MapClasses {
 
             t = reader.ReadLine();
 
-            while(!reader.EndOfStream) {
+            while (!reader.EndOfStream) {
                 t = reader.ReadLine();
-                if(t.StartsWith("#")) {
-                    if(t.StartsWith("#src")) {
+                if (t.StartsWith("#")) {
+                    if (t.StartsWith("#src")) {
                         split = t.Split(' ');
-                        if(split.Length > 1) {
+                        if (split.Length > 1) {
                             n = Convert.ToInt32(split[1]);
                             currentTex = n - 1;
                         }
@@ -41,7 +48,7 @@ namespace MapEditor.MapClasses {
 
                     t = reader.ReadLine();
                     split = t.Split(' ');
-                    if(split.Length > 3) {
+                    if (split.Length > 3) {
                         tRect.X = Convert.ToInt32(split[0]);
                         tRect.Y = Convert.ToInt32(split[1]);
                         tRect.Width = Convert.ToInt32(split[2]) - tRect.X;
@@ -76,6 +83,11 @@ namespace MapEditor.MapClasses {
         }
 
 
+        public int[,] Grid {
+            get { return col; }
+        }
+
+
 
         /// <summary>
         /// 
@@ -84,8 +96,8 @@ namespace MapEditor.MapClasses {
         /// <param name="index"></param>
         /// <returns></returns>
         public int AddSegment(int layer, int index) {
-            for(int i = 0; i < 64; i++) {
-                if(mapSegments[layer, i] == null) {
+            for (int i = 0; i < 64; i++) {
+                if (mapSegments[layer, i] == null) {
                     mapSegments[layer, i] = new MapSegment();
                     mapSegments[layer, i].Index = index;
                     return i;
@@ -97,28 +109,52 @@ namespace MapEditor.MapClasses {
 
 
 
+        public int GetHoveredSegment(int x, int y, int l, Vector2 scroll) {
+            float scale = 1.0f;
+            if (l == 0)
+                scale = 0.75f;
+            else if (l == 2)
+                scale = 1.25f;
+            scale *= 0.5f;
+
+            for (int i = 63; i >= 0; i--) {
+                if (mapSegments[l, i] != null) {
+                    Rectangle sourceRect = segmentDefs[mapSegments[l, i].Index].SourceRectangle;
+                    Rectangle destinationRect = new Rectangle(
+                        (int)(mapSegments[l, i].Location.X - scroll.X * scale),
+                        (int)(mapSegments[l, i].Location.Y - scroll.Y * scale),
+                        (int)(sourceRect.Width * scale),
+                        (int)(sourceRect.Height * scale));
+                    if (destinationRect.Contains(x, y))
+                        return i;
+                }
+            }
+
+            return -1;
+        }
+
         public void Draw(SpriteBatch sprite, Texture2D[] mapsTextures, Vector2 scroll) {
             Rectangle sourceRect = new Rectangle();
             Rectangle destRect = new Rectangle();
 
             sprite.Begin();
-            for(int l = 0; l < 3; l++) {
+            for (int l = 0; l < 3; l++) {
                 float scale = 1.0f;
                 Color color = Color.White;
-                if(l == 0) {
+                if (l == 0) {
                     color = Color.Gray;
                     scale = 0.75f;
-                } else if(l ==2){
+                } else if (l == 2) {
                     color = Color.DarkGray;
                     scale = 1.25f;
                 }
 
                 scale *= 0.5f;
-                for(int i = 0; i < 64; i++) {
-                    if(mapSegments[l, i] != null) {
+                for (int i = 0; i < 64; i++) {
+                    if (mapSegments[l, i] != null) {
                         sourceRect = segmentDefs[mapSegments[l, i].Index].SourceRectangle;
                         destRect.X = (int)(mapSegments[l, i].Location.X - scroll.X * scale);
-                        destRect.Y = (int)(mapSegments[l, i].Location.Y - scroll.X * scale);
+                        destRect.Y = (int)(mapSegments[l, i].Location.Y - scroll.Y * scale);
                         destRect.Width = (int)(sourceRect.Width * scale);
                         destRect.Height = (int)(sourceRect.Height * scale);
 
